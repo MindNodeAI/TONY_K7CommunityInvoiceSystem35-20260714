@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>社區發票AI入帳系統 | TONY STUDIO</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        /* Safe Area for Mobile Browsers (Notch/URL Bar adjustments) */
+        body { 
+            font-family: 'Inter', 'Noto Sans TC', sans-serif; 
+            background-color: #f3f4f6; 
+            padding-top: env(safe-area-inset-top); 
+            padding-bottom: env(safe-area-inset-bottom); 
+            padding-left: env(safe-area-inset-left); 
+            padding-right: env(safe-area-inset-right);
+        }
+        /* 強制將導覽列往下推移，絕對避開任何手機頂部的瀏海或工具列遮擋 */
+        .sticky-safe { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); z-index: 50; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .hidden-view { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+        /* Form elements transition */
+        .input-transition { transition: all 0.3s ease; }
+        
+        /* Markdown styles for AI response */
+        .prose p { margin-bottom: 0.75em; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .prose h1, .prose h2, .prose h3 { font-weight: 700; margin-top: 1em; margin-bottom: 0.5em; }
+        .prose strong { font-weight: 700; color: #111827; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Global Loader -->
+    <div id="global-loader" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
+        <p id="loader-text" class="text-gray-700 font-medium">載入中...</p>
+    </div>
+
+    <!-- Custom Modal -->
+    <div id="custom-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div id="modal-icon" class="text-3xl mr-3"></div>
+                    <h3 id="modal-title" class="text-xl font-bold text-gray-900"></h3>
+                </div>
+                <div id="modal-message" class="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap"></div>
+            </div>
+            <div class="bg-gray-50 px-6 py-3 flex justify-end">
+                <button onclick="window.ui.closeModal()" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Confirm Modal (For Deletes, etc.) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-3xl mr-3"></i>
+                    <h3 id="confirm-title" class="text-xl font-bold text-gray-900">確認操作</h3>
+                </div>
+                <div id="confirm-message" class="text-gray-600 text-sm leading-relaxed mb-6"></div>
+                <div class="flex justify-end space-x-3">
+                    <button onclick="window.ui.closeConfirmModal(false)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors">取消</button>
+                    <button id="confirm-btn-yes" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">確定執行</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Record Modal -->
+    <div id="edit-record-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 sm:p-4 transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden transform transition-all max-h-[95vh] flex flex-col">
+            <div class="p-4 sm:p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg sm:text-xl font-bold text-gray-800"><i class="fa-solid fa-pen-to-square text-blue-500 mr-2"></i>修改單據資料</h3>
+                <button onclick="document.getElementById('edit-record-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-2"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-4 sm:p-5 overflow-y-auto">
+                <form id="edit-invoice-form" class="space-y-4" onsubmit="window.invoiceOps.saveEditRecord(event)">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">日期 <span class="text-red-500">*</span></label>
+                            <input type="date" id="edit-inv-date" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">單據類型 <span class="text-red-500">*</span></label>
+                            <select id="edit-inv-type" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="發票">發票</option>
+                                <option value="收據">收據</option>
+                                <option value="估價單">估價單</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">發票號碼</label>
+                            <input type="text" id="edit-inv-number" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">交易對象 <span class="text-red-500">*</span></label>
+                            <input type="text" id="edit-inv-vendor" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">品項摘要 <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit-inv-summary" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">金額 <span class="text-red-500">*</span></label>
+                            <input type="number" id="edit-inv-amount" required min="1" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-right text-red-600 font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">會計科目 <span class="text-red-500">*</span></label>
+                            <select id="edit-inv-category" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="清潔費">清潔費</option>
+                                <option value="保全費">保全費</option>
+                                <option value="機電維護">機電維護</option>
+                                <option value="修繕費">修繕費</option>
+                                <option value="水電費">水電費</option>
+                                <option value="行政雜支">行政雜支</option>
+                                <option value="零用金支出">零用金支出</option>
+                                <option value="其他支出">其他支出</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">付款方式</label>
+                            <input type="text" id="edit-inv-payment" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">憑證狀態 <span class="text-red-500">*</span></label>
+                            <select id="edit-inv-status" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="已確認" class="text-green-600">🟢 已確認</option>
+                                <option value="需人工確認" class="text-red-600">🔴 需人工確認</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">備註</label>
+                        <textarea id="edit-inv-note" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                    </div>
+                    <div class="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 mt-4 flex">
+                        <i class="fa-solid fa-circle-info mt-0.5 mr-2"></i>
+                        <p>修改此處的資料將同步更新「本地端」與「雲端系統」。<strong class="text-red-600">若您有串接 Google Sheets，請務必手動前往 Google 試算表修改對應的列，Webhook 無法自動修改外部試算表。</strong></p>
+                    </div>
+                    <div class="pt-4 flex justify-end space-x-3 border-t">
+                        <button type="button" onclick="document.getElementById('edit-record-modal').classList.add('hidden')" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2 rounded-lg text-sm font-medium transition-colors">取消</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow transition-colors">儲存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Nav (Floating Dark Mode) -->
+    <nav id="main-nav" class="bg-gray-900 shadow-2xl border border-gray-800 sticky-safe hidden-view mx-2 sm:mx-4 mt-6 sm:mt-8 rounded-2xl overflow-hidden z-50 transition-all">
+        <div class="container mx-auto px-3 sm:px-5 pt-3 pb-2 flex flex-col gap-3">
+            <!-- Row 1: Logo & User Info -->
+            <div class="flex justify-between items-center w-full">
+                <div class="flex items-center space-x-2 shrink-0">
+                    <img src="https://i.postimg.cc/fT2sQW09/1.png" alt="Logo" class="h-7 w-7 sm:h-8 sm:w-8 object-contain bg-white rounded flex-shrink-0 p-0.5">
+                    <span class="font-bold text-base sm:text-lg tracking-tight text-white">社區發票系統</span>
+                </div>
+                
+                <!-- User Info & Logout -->
+                <div id="user-info-display" class="flex items-center shrink-0">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+            
+            <!-- Row 2: Navigation Links (Scrollable horizontally on mobile) -->
+            <div id="nav-links" class="flex overflow-x-auto hide-scrollbar w-full space-x-1 sm:space-x-2 pb-1 pt-2 border-t border-gray-800">
+                <button onclick="window.ui.showView('view-profile')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa-solid fa-address-card mr-1"></i>顧問簡介
+                </button>
+                <button id="nav-upload" onclick="window.ui.showView('view-upload')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors hidden">
+                    <i class="fa-solid fa-file-invoice mr-1"></i>上傳單據
+                </button>
+                <button id="nav-records" onclick="window.ui.showView('view-records')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors hidden">
+                    <i class="fa-solid fa-list mr-1"></i>資料紀錄
+                </button>
+                <button id="nav-task" onclick="window.ui.showView('view-task')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-blue-400 bg-blue-900/30 hover:bg-blue-900/60 transition-colors hidden font-bold">
+                    <i class="fa-solid fa-rocket mr-1"></i>實作任務區
+                </button>
+                <button id="nav-settings" onclick="window.ui.showView('view-settings')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa-solid fa-gear mr-1"></i>設定
+                </button>
+                <button id="nav-admin" onclick="window.adminOps.loadUsers(); window.ui.showView('view-admin')" class="shrink-0 px-3 py-2 text-xs sm:text-sm font-bold rounded-lg text-red-400 bg-red-900/30 hover:bg-red-900/60 border border-red-800/50 transition-colors hidden">
+                    <i class="fa-solid fa-shield-halved mr-1"></i>管理後台
+                </button>
+            </div>
+        </div>
+        <!-- API Status Bar -->
+        <div class="bg-black/50 border-t border-gray-800 px-4 py-1.5 flex justify-end items-center">
+            <div id="api-key-indicator" class="text-[10px] sm:text-xs text-gray-500">
+                <i class="fa-solid fa-key text-red-500 mr-1"></i> 需設定 API
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow flex flex-col relative w-full h-full">
+
+        <!-- VIEW: Login / Register (Auth Gate) -->
+        <div id="view-login" class="app-view min-h-screen flex items-center justify-center bg-[url('https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80')] bg-cover bg-center bg-no-repeat relative">
+            <div class="absolute inset-0 bg-gray-900/70 backdrop-blur-sm"></div>
+            
+            <div class="relative z-10 w-full max-w-md mx-auto p-4">
+                <div class="text-center mb-8">
+                    <img src="https://i.postimg.cc/fT2sQW09/1.png" alt="Logo" class="h-20 mx-auto rounded-xl shadow-2xl mb-4 bg-white p-2">
+                    <h1 class="text-3xl font-bold text-white tracking-wide shadow-black drop-shadow-lg">社區發票AI入帳系統</h1>
+                    <p class="text-blue-200 mt-2 font-medium tracking-wider">AI 自動辨識・雲端同步儲存・智能輔助</p>
+                </div>
+
+                <!-- Login Container -->
+                <div id="login-container" class="glass-panel p-8 rounded-2xl shadow-2xl transition-all duration-300">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center border-b border-gray-200 pb-4">會員登入</h2>
+                    <form id="login-form" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email 信箱</label>
+                            <div class="relative">
+                                <i class="fa-regular fa-envelope absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input type="email" id="login-email" required class="input-transition w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white/90">
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-sm font-medium text-gray-700">密碼</label>
+                                <button type="button" onclick="window.auth.resetPassword()" class="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium">忘記密碼？</button>
+                            </div>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input type="password" id="login-password" required class="input-transition w-full border border-gray-300 rounded-lg pl-10 pr-10 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white/90">
+                                <button type="button" onclick="window.ui.togglePasswordVisibility('login-password', 'login-eye-icon')" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                    <i id="login-eye-icon" class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg shadow-blue-500/30 transform hover:-translate-y-0.5 text-lg">進入系統</button>
+                    </form>
+                    <div class="mt-6 text-center text-sm text-gray-600">
+                        還沒有帳號嗎？ <button type="button" onclick="window.ui.toggleAuthMode('register')" class="text-blue-600 font-bold hover:underline">立即註冊</button>
+                    </div>
+                </div>
+
+                <!-- Register Container -->
+                <div id="register-container" class="glass-panel p-6 sm:p-8 rounded-2xl shadow-2xl transition-all duration-300 hidden">
+                    <div class="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">建立新帳號</h2>
+                        <button type="button" onclick="window.ui.toggleAuthMode('login')" class="text-gray-400 hover:text-gray-800 transition-colors p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+                    </div>
+                    
+                    <form id="register-form" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">真實姓名 <span class="text-red-500">*</span></label>
+                                <input type="text" id="reg-name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">身分選擇 <span class="text-red-500">*</span></label>
+                                <select id="reg-identity" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                    <option value="">請選擇...</option>
+                                    <option value="TONY老師學員">TONY老師學員</option>
+                                    <option value="一般訪客">一般訪客</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">社區名稱 (選填)</label>
+                            <input type="text" id="reg-community" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="若無社區服務可留空">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Email 信箱 <span class="text-red-500">*</span></label>
+                            <input type="email" id="reg-email" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="需收取驗證信">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">設定密碼 <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="password" id="reg-password" required minlength="6" class="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <button type="button" onclick="window.ui.togglePasswordVisibility('reg-password', 'reg-eye-icon1')" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none">
+                                        <i id="reg-eye-icon1" class="fa-solid fa-eye text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">確認密碼 <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="password" id="reg-password-confirm" required minlength="6" class="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <button type="button" onclick="window.ui.togglePasswordVisibility('reg-password-confirm', 'reg-eye-icon2')" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none">
+                                        <i id="reg-eye-icon2" class="fa-solid fa-eye text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 p-3 rounded border border-blue-100 mt-2">
+                            <p class="text-xs text-blue-800 leading-relaxed">
+                                <i class="fa-solid fa-circle-info mr-1"></i>註冊後系統將發送驗證信至您的信箱。新帳號預設權限為「檢視者」，若需操作權限請待管理員審核。
+                            </p>
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-4 rounded-lg mt-4 transition-colors text-sm shadow-lg">同意規範並送出註冊</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="absolute bottom-4 w-full text-center text-white/60 text-xs">
+                 © 2026 TONY STUDIO. 本教材由 TONY STUDIO 楊文澤顧問設計. All Rights Reserved.
+            </div>
+        </div>
+
+        <!-- VIEW: Pending Approval -->
+        <div id="view-pending" class="app-view hidden-view min-h-screen flex items-center justify-center bg-gray-100 p-4">
+            <div class="max-w-md mx-auto text-center glass-panel p-8 rounded-2xl shadow-xl w-full">
+                <div class="text-yellow-500 text-6xl mb-4 animate-bounce"><i class="fa-solid fa-user-clock"></i></div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">權限審核中</h2>
+                <p class="text-gray-600 mb-6 bg-yellow-50 p-4 rounded-lg border border-yellow-200">您已成功驗證信箱並登入，但目前您的帳號狀態為 <strong>[待審核]</strong>。<br>請等待管理員核准後，即可使用系統完整功能。</p>
+                <div class="flex flex-col sm:flex-row justify-center gap-3">
+                    <button onclick="window.auth.fetchUserData(window.appState.currentUser)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow"><i class="fa-solid fa-rotate-right mr-1"></i>重新整理狀態</button>
+                    <button onclick="window.auth.logout()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors">登出</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Settings / API Config -->
+        <div id="view-settings" class="app-view hidden-view flex-grow p-4 sm:p-8">
+            <div class="max-w-3xl mx-auto">
+                <div class="glass-panel p-6 rounded-2xl shadow-lg border-t-4 border-indigo-500 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2"><i class="fa-solid fa-gear mr-2 text-indigo-500"></i>系統 API 與整合設定</h2>
+                    <p class="text-sm text-gray-600 mb-6 pb-4 border-b">為確保資安，API 金鑰僅會儲存在您的瀏覽器本地端 (Local Storage)，不會傳送至我們的資料庫。若您更換電腦或瀏覽器，需要重新輸入。</p>
+                    
+                    <form id="settings-form" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">1. Google Gemini API Key <span class="text-red-500">*</span></label>
+                            <p class="text-xs text-gray-500 mb-2">用於發票 OCR 辨識與任務 AI 生成功能。<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square text-xs mr-1"></i>前往 Google AI Studio 申請</a></p>
+                            <div class="relative">
+                                <i class="fa-solid fa-key absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input type="password" id="setting-gemini-key" placeholder="AIzaSy..." class="w-full border border-gray-300 rounded-lg pl-10 pr-10 py-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50 font-mono text-sm">
+                                <button type="button" onclick="window.ui.togglePasswordVisibility('setting-gemini-key', 'setting-eye-gemini')" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-700">
+                                    <i id="setting-eye-gemini" class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">2. Google Sheet Webhook URL (選填)</label>
+                            
+                            <!-- 💡 Webhook Help Toggle -->
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="text-xs text-gray-500">用於將資料自動寫入 Google 試算表。</p>
+                                <button type="button" onclick="document.getElementById('webhook-guide').classList.toggle('hidden')" class="text-xs text-blue-600 hover:text-blue-800 hover:underline font-bold transition-colors">
+                                    <i class="fa-solid fa-circle-question mr-1"></i>如何取得 Webhook 網址？
+                                </button>
+                            </div>
+                            
+                            <!-- 📖 Webhook Guide Content (Hidden by default) -->
+                            <div id="webhook-guide" class="hidden mb-4 p-4 sm:p-5 bg-indigo-50/50 border border-indigo-200 rounded-xl text-sm text-indigo-900 shadow-inner">
+                                <h4 class="font-bold text-base mb-3 border-b border-indigo-200 pb-2"><i class="fa-solid fa-laptop-code mr-2 text-indigo-600"></i>Google Sheets Webhook 設定 3 步驟</h4>
+                                
+                                <div class="space-y-4 text-gray-700">
+                                    <div>
+                                        <strong class="text-indigo-700">👉 第一步：準備試算表</strong>
+                                        <p class="mt-1 text-xs sm:text-sm">建立一個新的 Google 試算表，並將下方第一個工作表的名稱改為：<strong class="bg-white px-1.5 py-0.5 rounded border border-gray-300 font-mono">01_單據彙整</strong></p>
+                                    </div>
+                                    
+                                    <div>
+                                        <strong class="text-indigo-700">👉 第二步：貼上程式碼</strong>
+                                        <p class="mt-1 text-xs sm:text-sm mb-2">點擊上方選單的「擴充功能」>「Apps Script」，把裡面的程式碼全刪掉，然後貼上以下這段代碼：</p>
+                                        <div class="relative group">
+                                            <button type="button" onclick="window.ui.copyWebhookScript()" class="absolute top-2 right-2 bg-gray-800 hover:bg-gray-700 text-white text-xs px-2 py-1 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <i class="fa-solid fa-copy mr-1"></i>複製代碼
+                                            </button>
+                                            <textarea id="webhook-script-code" readonly class="w-full h-32 sm:h-40 bg-gray-900 text-green-400 font-mono text-xs p-3 rounded-lg outline-none resize-y border border-gray-700 overflow-auto">function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("01_單據彙整");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "找不到工作表: 01_單據彙整"})).setMimeType(ContentService.MimeType.JSON);
+    var data = JSON.parse(e.postData.contents);
+    var rowData = [
+      data.createdAt || "", data.community || "", data.month || "", data.date || "", data.type || "", 
+      data.invoiceNumber || "", data.vendor || "", data.summary || "", data.category || "", data.amount || 0, 
+      data.payment || "", data.status || "", "", data.note || "", data.creatorEmail || "", data.creatorName || "", "confirmed"
+    ];
+    sheet.appendRow(rowData);
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}</textarea>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <strong class="text-indigo-700">👉 第三步：部署並取得網址</strong>
+                                        <p class="mt-1 text-xs sm:text-sm">
+                                            1. 點擊右上角「部署」>「新增部署作業」。<br>
+                                            2. 左上角選取類型勾選「網頁應用程式」。<br>
+                                            3. <span class="text-red-600 font-bold underline">誰可以存取：務必選擇「所有人」</span>。<br>
+                                            4. 點擊「部署」(若要求授權請點進階>前往>允許)。<br>
+                                            5. 複製顯示的「網頁應用程式網址」，貼到下方的欄位並儲存即可！
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="relative">
+                                <i class="fa-solid fa-link absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input type="url" id="setting-webhook-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-gray-300 rounded-lg pl-10 py-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50 font-mono text-sm">
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex justify-end">
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors">
+                                <i class="fa-solid fa-floppy-disk mr-2"></i>儲存設定
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Profile (TONY 顧問簡介) -->
+        <div id="view-profile" class="app-view hidden-view flex-grow p-4 sm:p-8">
+            <div class="max-w-4xl mx-auto">
+                <div class="glass-panel rounded-3xl shadow-xl overflow-hidden bg-white border border-gray-100">
+                    <div class="bg-gradient-to-r from-slate-800 to-indigo-900 h-32 sm:h-48 relative">
+                        <!-- Cover Image / Banner -->
+                    </div>
+                    <div class="px-6 sm:px-12 pb-12 relative">
+                        <!-- Avatar -->
+                        <div class="flex justify-center -mt-16 sm:-mt-24 mb-6">
+                            <img src="https://i.postimg.cc/Gh8Zt7SX/S_56844323.jpg" alt="TONY 楊文澤" class="h-32 w-32 sm:h-48 sm:w-48 rounded-full border-4 border-white shadow-xl object-cover bg-white">
+                        </div>
+                        
+                        <!-- Info -->
+                        <div class="text-center mb-10">
+                            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight mb-2">TONY 楊文澤 老師</h1>
+                            <p class="text-lg text-indigo-600 font-bold mb-4">資深數位行銷科技顧問 | 生成式 AI 創作者 | 創業導師</p>
+                            <div class="w-24 h-1 bg-indigo-500 mx-auto rounded-full"></div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-700">
+                            <!-- Section: Current & Edu -->
+                            <div class="space-y-8">
+                                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-briefcase text-indigo-500 mr-3 text-2xl"></i> 現職 Current</h3>
+                                    <ul class="space-y-3 leading-relaxed">
+                                        <li class="flex items-start"><i class="fa-solid fa-check text-green-500 mt-1 mr-2"></i>龍華科大 數位行銷講師</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-check text-green-500 mt-1 mr-2"></i>智策慧 品牌行銷科技顧問</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-graduation-cap text-indigo-500 mr-3 text-2xl"></i> 學歷 Education</h3>
+                                    <ul class="space-y-3 leading-relaxed">
+                                        <li class="flex items-start"><i class="fa-solid fa-award text-yellow-500 mt-1 mr-2"></i>台大 EMBA 商學組</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-award text-yellow-500 mt-1 mr-2"></i>美國 Arizona State University 互動多媒體設計</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-award text-yellow-500 mt-1 mr-2"></i>北科大 工業設計</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <!-- Section: Exp & Teaching -->
+                            <div class="space-y-8">
+                                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-building text-indigo-500 mr-3 text-2xl"></i> 經歷 Experience</h3>
+                                    <ul class="space-y-3 leading-relaxed">
+                                        <li class="flex items-start"><i class="fa-solid fa-caret-right text-gray-400 mt-1 mr-2"></i>脈動心聯股份有限公司 創辦人暨執行長</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-caret-right text-gray-400 mt-1 mr-2"></i>宏碁集團建碁 AOPEN 整合營銷處處長 / 全球品牌行銷總監 / 企業發言人</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-caret-right text-gray-400 mt-1 mr-2"></i>台灣數位看板多媒體聯盟 (DSMA) 副會長</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center"><i class="fa-solid fa-chalkboard-user text-indigo-500 mr-3 text-2xl"></i> 專家授課經歷</h3>
+                                    <ul class="space-y-3 leading-relaxed">
+                                        <li class="flex items-start"><i class="fa-solid fa-star text-blue-400 mt-1 mr-2 text-sm"></i>CPC 生產力中心 經營管理顧問師班 / 中小企業成長創價能量 講師</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-star text-blue-400 mt-1 mr-2 text-sm"></i>台大 EMBA / 長榮 EMBA / 北科大 / 政大 / 世新 業師</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-star text-blue-400 mt-1 mr-2 text-sm"></i>2021 MarTech 行銷科技行銷長認證班 講師</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-star text-blue-400 mt-1 mr-2 text-sm"></i>2021/2024/2025 T大使與產業尖兵 講師</li>
+                                        <li class="flex items-start"><i class="fa-solid fa-star text-blue-400 mt-1 mr-2 text-sm"></i>2025 新光人壽 AI 工具應用 企業內訓講師</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Admin Panel -->
+        <div id="view-admin" class="app-view hidden-view flex-grow p-4 sm:p-8">
+            <div class="max-w-7xl mx-auto glass-panel rounded-2xl p-6 border-t-4 border-red-600 shadow-xl">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-red-700 tracking-tight"><i class="fa-solid fa-shield-halved mr-2"></i>系統最高管理後台</h2>
+                        <p class="text-sm text-gray-500 mt-1">管理所有註冊會員、審核權限與檢視操作狀態。</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="window.adminOps.loadUsers()" class="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border shadow-sm transition-colors"><i class="fa-solid fa-rotate mr-1"></i>重載名單</button>
+                        <button onclick="window.adminOps.exportUsersCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors"><i class="fa-solid fa-file-csv mr-1"></i>匯出會員名單 (CSV)</button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto bg-white rounded-xl border shadow-sm">
+                    <table class="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                            <tr class="bg-gray-800 text-white">
+                                <th class="p-3 text-sm font-medium rounded-tl-xl">會員資料</th>
+                                <th class="p-3 text-sm font-medium">身分</th>
+                                <th class="p-3 text-sm font-medium">社區名稱</th>
+                                <th class="p-3 text-sm font-medium">註冊日期</th>
+                                <th class="p-3 text-sm font-medium text-center">權限 (Role)</th>
+                                <th class="p-3 text-sm font-medium text-center">狀態 (Status)</th>
+                                <th class="p-3 text-sm font-medium text-center">登入</th>
+                                <th class="p-3 text-sm font-medium text-right rounded-tr-xl">管理操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-tbody" class="divide-y divide-gray-200">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 shadow-inner flex items-start">
+                    <i class="fa-solid fa-circle-exclamation mt-1 mr-3 text-red-500 text-lg"></i>
+                    <div>
+                        <strong class="text-base block mb-1">管理員重要須知：</strong>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>新註冊並通過 Email 驗證的用戶，預設狀態為 <span class="bg-yellow-200 px-1 rounded text-yellow-800">pending (待審核)</span>，需手動改為 <span class="bg-green-200 px-1 rounded text-green-800">active</span> 才能進入主系統。</li>
+                            <li>角色說明：<strong>Viewer</strong>(僅檢視)、<strong>Editor</strong>(可上傳發票)、<strong>Admin</strong>(最高權限)。</li>
+                            <li><span class="font-bold underline text-red-600">系統創作者保護機制</span>：帳號 <code>mindnodeai@gmail.com</code> 具有絕對最高權限，無法被變更狀態、降級或刪除。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Invoice Upload & OCR -->
+        <div id="view-upload" class="app-view hidden-view flex-grow p-4 sm:p-8">
+            <div class="max-w-4xl mx-auto">
+                <div class="glass-panel p-6 rounded-2xl shadow-lg border-t-4 border-blue-500">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2"><i class="fa-solid fa-file-invoice mr-2 text-blue-500"></i>單據 AI 辨識入帳</h2>
+                    <p class="text-sm text-gray-500 mb-6 pb-4 border-b">請上傳清楚的發票、收據或支出憑證照片，AI 將自動為您萃取欄位資訊。</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Left: Upload Area -->
+                        <div>
+                            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-colors cursor-pointer group flex flex-col items-center justify-center min-h-[250px]" onclick="document.getElementById('invoice-file').click()">
+                                <i class="fa-solid fa-cloud-arrow-up text-5xl text-gray-400 group-hover:text-blue-500 transition-colors mb-4"></i>
+                                <p class="text-gray-600 font-medium">點擊或拖曳圖片至此處上傳</p>
+                                <p class="text-xs text-gray-400 mt-2">支援 JPG, PNG, WEBP</p>
+                                <input type="file" id="invoice-file" class="hidden" accept="image/jpeg, image/png, image/webp" onchange="window.invoiceOps.handleFileSelect(event)">
+                            </div>
+                            
+                            <div id="image-preview-container" class="hidden mt-4 relative rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                                <img id="image-preview" src="" alt="預覽圖" class="w-full h-auto object-contain bg-black/5">
+                                <button onclick="window.invoiceOps.clearFile()" class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow transition-colors"><i class="fa-solid fa-times"></i></button>
+                            </div>
+
+                            <button id="btn-ocr" onclick="window.invoiceOps.runOCR()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition-colors hidden disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>開始 AI 智能辨識
+                            </button>
+                        </div>
+
+                        <!-- Right: OCR Form -->
+                        <div class="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm mt-6 md:mt-0">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center"><i class="fa-solid fa-list-check text-green-500 mr-2"></i>辨識結果確認</h3>
+                            <form id="invoice-form" class="space-y-3 opacity-50 pointer-events-none transition-opacity" onsubmit="window.invoiceOps.saveData(event)">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">日期 <span class="text-red-500">*</span></label>
+                                        <input type="date" id="inv-date" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">單據類型 <span class="text-red-500">*</span></label>
+                                        <select id="inv-type" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500 bg-white">
+                                            <option value="發票">發票</option>
+                                            <option value="收據">收據</option>
+                                            <option value="估價單">估價單</option>
+                                            <option value="其他">其他</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700">發票號碼</label>
+                                    <input type="text" id="inv-number" class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500 uppercase">
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700">交易對象 (店家) <span class="text-red-500">*</span></label>
+                                    <input type="text" id="inv-vendor" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500">
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700">品項摘要 <span class="text-red-500">*</span></label>
+                                    <input type="text" id="inv-summary" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500">
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">金額 (純數字) <span class="text-red-500">*</span></label>
+                                        <input type="number" id="inv-amount" required min="1" class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500 font-mono text-right text-red-600 font-bold">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">會計科目 <span class="text-red-500">*</span></label>
+                                        <select id="inv-category" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500 bg-white">
+                                            <option value="">請選擇</option>
+                                            <option value="清潔費">清潔費</option>
+                                            <option value="保全費">保全費</option>
+                                            <option value="機電維護">機電維護</option>
+                                            <option value="修繕費">修繕費</option>
+                                            <option value="水電費">水電費</option>
+                                            <option value="行政雜支">行政雜支</option>
+                                            <option value="零用金支出">零用金支出</option>
+                                            <option value="其他支出">其他支出</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">付款方式</label>
+                                        <input type="text" id="inv-payment" class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700">憑證狀態 <span class="text-red-500">*</span></label>
+                                        <select id="inv-status" required class="w-full border border-gray-300 rounded px-2 py-1.5 sm:py-1 text-sm outline-none focus:border-blue-500 bg-white">
+                                            <option value="已確認" class="text-green-600">🟢 已確認</option>
+                                            <option value="需人工確認" class="text-red-600">🔴 需人工確認</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700">備註</label>
+                                    <textarea id="inv-note" rows="2" class="w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 resize-none"></textarea>
+                                </div>
+
+                                <button type="submit" id="btn-save" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow transition-colors mt-4">
+                                    <i class="fa-solid fa-cloud-arrow-up mr-2"></i>儲存並同步至雲端
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Records (Local & Cloud) -->
+        <div id="view-records" class="app-view hidden-view flex-grow p-3 sm:p-8">
+            <div class="max-w-7xl mx-auto">
+                <div class="glass-panel p-4 sm:p-6 rounded-2xl shadow-lg border-t-4 border-green-500">
+                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-6 border-b pb-4 gap-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check mr-2 text-green-500"></i>單據入帳紀錄</h2>
+                            <p class="text-sm text-gray-500 mt-1">此處顯示您的發票入帳紀錄，並提供本地端與雲端的資料同步、備份及修改功能。</p>
+                        </div>
+                        <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full lg:w-auto">
+                            <input type="file" id="restore-file" accept=".json" class="hidden" onchange="window.invoiceOps.restoreData(event)">
+                            <button onclick="window.invoiceOps.syncFromCloud()" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors w-full sm:w-auto">
+                                <i class="fa-solid fa-cloud-arrow-down mr-1"></i>從雲端同步
+                            </button>
+                            <button onclick="document.getElementById('restore-file').click()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors w-full sm:w-auto">
+                                <i class="fa-solid fa-upload mr-1"></i>載入備份
+                            </button>
+                            <button onclick="window.invoiceOps.backupData()" class="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors w-full sm:w-auto">
+                                <i class="fa-solid fa-download mr-1"></i>備份資料
+                            </button>
+                            <button onclick="window.invoiceOps.exportLocalCSV()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors w-full sm:w-auto">
+                                <i class="fa-solid fa-file-csv mr-1"></i>匯出 CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto bg-white rounded-xl border shadow-sm">
+                        <table class="w-full text-left border-collapse min-w-[1000px]">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="p-3 text-xs font-bold">建立時間</th>
+                                    <th class="p-3 text-xs font-bold">單據日期</th>
+                                    <th class="p-3 text-xs font-bold">對象/摘要</th>
+                                    <th class="p-3 text-xs font-bold text-right">金額</th>
+                                    <th class="p-3 text-xs font-bold">科目</th>
+                                    <th class="p-3 text-xs font-bold">憑證狀態</th>
+                                    <th class="p-3 text-xs font-bold">建檔人</th>
+                                    <th class="p-3 text-xs font-bold text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="records-tbody" class="divide-y divide-gray-200">
+                                <!-- Populated by JS -->
+                                <tr><td colspan="8" class="text-center py-8 text-gray-500">載入中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Tasks (多模態實作任務區) -->
+        <div id="view-task" class="app-view hidden-view flex-grow p-4 sm:p-8">
+            <div class="max-w-5xl mx-auto">
+                <div class="glass-panel p-6 rounded-2xl shadow-xl border-t-4 border-amber-500 bg-gradient-to-br from-white to-orange-50">
+                    <div class="flex items-center mb-6 border-b border-orange-200 pb-4">
+                        <i class="fa-solid fa-rocket text-3xl text-amber-500 mr-4"></i>
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">AI 實作任務區</h2>
+                            <p class="text-sm text-gray-600 mt-1">上傳補充資料 (PDF, 圖片, Word, CSV...)，設定任務指令，讓 Gemini 3.5 Flash 幫您產出專業報告，並直接存成 Word 檔！</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Left: Input Area -->
+                        <div class="space-y-4">
+                            <!-- Task Prompt -->
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                <label class="block text-sm font-bold text-gray-800 mb-2">1. 任務指令與背景說明 <span class="text-red-500">*</span></label>
+                                <textarea id="task-prompt" rows="5" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none" placeholder="例如：請根據我上傳的會議紀錄 PDF 和財報 CSV，幫我總結出三大重點，並草擬一份給管委會的報告書。"></textarea>
+                            </div>
+
+                            <!-- File Uploads -->
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                <label class="block text-sm font-bold text-gray-800 mb-2">2. 上傳補充檔案 (可複選)</label>
+                                <p class="text-xs text-gray-500 mb-3">支援圖片(jpg/png)、PDF、純文字(txt/csv/md)。Word/Excel 請先轉存 PDF 或 CSV 以確保最佳解析。</p>
+                                
+                                <div class="border-2 border-dashed border-amber-200 rounded-lg p-6 text-center hover:bg-amber-50 transition-colors cursor-pointer" onclick="document.getElementById('task-files').click()">
+                                    <i class="fa-solid fa-file-circle-plus text-3xl text-amber-400 mb-2"></i>
+                                    <p class="text-sm text-gray-600 font-medium">點擊選擇檔案</p>
+                                    <input type="file" id="task-files" class="hidden" multiple accept=".pdf,image/jpeg,image/png,image/webp,.txt,.csv,.md" onchange="window.taskOps.handleFilesSelect(event)">
+                                </div>
+                                <!-- File List -->
+                                <ul id="task-file-list" class="mt-3 space-y-2 text-sm text-gray-600"></ul>
+                            </div>
+
+                            <!-- Link / Context -->
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                <label class="block text-sm font-bold text-gray-800 mb-2">3. 網址或額外文字補充 (選填)</label>
+                                <input type="text" id="task-link" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none mb-2" placeholder="貼上參考網址 (AI將盡力讀取)...">
+                            </div>
+
+                            <button onclick="window.taskOps.runTask()" class="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform hover:-translate-y-0.5 transition-all">
+                                <i class="fa-solid fa-brain mr-2"></i>執行 AI 任務
+                            </button>
+                        </div>
+
+                        <!-- Right: Output Area -->
+                        <div class="flex flex-col h-full bg-white rounded-xl shadow-sm border border-orange-100 overflow-hidden">
+                            <div class="bg-gray-50 p-3 border-b flex justify-between items-center">
+                                <span class="font-bold text-gray-700 text-sm"><i class="fa-solid fa-robot text-amber-500 mr-2"></i>AI 產出結果</span>
+                                <div class="space-x-2">
+                                    <button onclick="window.taskOps.copyResult()" class="text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 bg-white rounded border shadow-sm text-xs font-medium" title="複製內容"><i class="fa-solid fa-copy"></i> 複製</button>
+                                    <button onclick="window.taskOps.exportWord()" class="text-white bg-blue-600 hover:bg-blue-700 transition-colors px-2 py-1 rounded border border-blue-700 shadow-sm text-xs font-medium" title="匯出Word檔"><i class="fa-solid fa-file-word"></i> 存成 Word</button>
+                                </div>
+                            </div>
+                            <div id="task-result-container" class="p-4 flex-grow overflow-y-auto bg-white min-h-[400px]">
+                                <div id="task-placeholder" class="h-full flex flex-col items-center justify-center text-gray-400">
+                                    <i class="fa-regular fa-comment-dots text-5xl mb-3 opacity-30"></i>
+                                    <p>AI 的回覆將顯示於此</p>
+                                </div>
+                                <!-- Markdown content injected here -->
+                                <div id="task-result-content" class="prose prose-sm sm:prose max-w-none hidden text-gray-800"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-800 text-slate-400 py-4 text-center text-xs mt-auto">
+        <div class="container mx-auto px-4">
+            <p>© 2026 TONY STUDIO. 本教材由 TONY STUDIO 楊文澤顧問設計. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+    <!-- MAIN LOGIC SCRIPT (ES MODULE) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs, addDoc, onSnapshot, orderBy, deleteDoc, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // TRUE Keys from user prompt
+        const firebaseConfig = {
+            apiKey: "AIzaSyBJPdvWl8mimKbfinhnUuxQN8WCT0MqhB0",
+            authDomain: "k7-community-invoice-system.firebaseapp.com",
+            projectId: "k7-community-invoice-system",
+            storageBucket: "k7-community-invoice-system.firebasestorage.app",
+            messagingSenderId: "824866248270",
+            appId: "1:824866248270:web:36b8a88c73b4e96aee951f",
+            measurementId: "G-QZXVXDJKZE"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        // Strict App ID for artifacts isolation rule
+        const appId = 'k7-community-invoice-system';
+
+        window.appState = {
+            currentUser: null,
+            userData: null,
+            currentView: 'view-login',
+            apiKey: localStorage.getItem('geminiApiKey') || '',
+            sheetWebhook: localStorage.getItem('googleSheetWebhook') || '',
+            localVouchers: JSON.parse(localStorage.getItem('localVouchers') || '[]'),
+            usersList: [],
+            taskFilesData: [] // Store uploaded files with metadata for task
+        };
+
+        window.ui = {
+            showView: (viewId) => {
+                document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden-view'));
+                const view = document.getElementById(viewId);
+                if (view) {
+                    view.classList.remove('hidden-view');
+                    view.classList.add('fade-in');
+                    window.appState.currentView = viewId;
+                    ui.updateNavStatus();
+                }
+            },
+            showModal: (title, message, type = 'info') => {
+                const modal = document.getElementById('custom-modal');
+                const titleEl = document.getElementById('modal-title');
+                const msgEl = document.getElementById('modal-message');
+                const iconEl = document.getElementById('modal-icon');
+                
+                titleEl.textContent = title;
+                msgEl.innerHTML = message;
+                
+                let iconHtml = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+                if(type === 'error') iconHtml = '<i class="fa-solid fa-circle-xmark text-red-500"></i>';
+                if(type === 'success') iconHtml = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+                if(type === 'warning') iconHtml = '<i class="fa-solid fa-triangle-exclamation text-yellow-500"></i>';
+                
+                iconEl.innerHTML = iconHtml;
+                modal.classList.remove('hidden');
+            },
+            closeModal: () => document.getElementById('custom-modal').classList.add('hidden'),
+            
+            showConfirmModal: (title, message, onConfirm) => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-title').textContent = title;
+                document.getElementById('confirm-message').innerHTML = message;
+                const btn = document.getElementById('confirm-btn-yes');
+                
+                btn.onclick = () => {
+                    modal.classList.add('hidden');
+                    if(onConfirm) onConfirm();
+                };
+                modal.classList.remove('hidden');
+            },
+            closeConfirmModal: () => document.getElementById('confirm-modal').classList.add('hidden'),
+
+            showLoading: (show, text = '處理中...') => {
+                const loader = document.getElementById('global-loader');
+                document.getElementById('loader-text').textContent = text;
+                show ? loader.classList.remove('hidden') : loader.classList.add('hidden');
+            },
+            togglePasswordVisibility: (inputId, iconId) => {
+                const input = document.getElementById(inputId);
+                const icon = document.getElementById(iconId);
+                if (input.type === "password") {
+                    input.type = "text";
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    input.type = "password";
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            },
+            toggleAuthMode: (mode) => {
+                if(mode === 'register') {
+                    document.getElementById('login-container').classList.add('hidden');
+                    document.getElementById('register-container').classList.remove('hidden');
+                } else {
+                    document.getElementById('register-container').classList.add('hidden');
+                    document.getElementById('login-container').classList.remove('hidden');
+                }
+            },
+            updateNavStatus: () => {
+                const authUser = window.appState.currentUser;
+                const dbUser = window.appState.userData;
+                const userInfo = document.getElementById('user-info-display');
+                const mainNav = document.getElementById('main-nav');
+                
+                // Key Indicator
+                const keyIndicator = document.getElementById('api-key-indicator');
+                if(keyIndicator) {
+                    if(window.appState.apiKey) {
+                        keyIndicator.innerHTML = `<i class="fa-solid fa-key text-green-400 mr-1"></i> <span class="hidden sm:inline text-gray-400">API 已備妥</span>`;
+                    } else {
+                        keyIndicator.innerHTML = `<i class="fa-solid fa-key text-red-500 mr-1"></i> <span class="hidden sm:inline animate-pulse text-red-400 font-bold">尚未設定 API</span>`;
+                    }
+                }
+
+                if (authUser && dbUser && authUser.emailVerified && dbUser.status === 'active') {
+                    // Logged in & Approved
+                    mainNav.classList.remove('hidden-view');
+                    
+                    // Dark theme role badges
+                    let roleBadge = 'bg-gray-800 text-gray-300 border border-gray-600';
+                    if(dbUser.role === 'admin') roleBadge = 'bg-red-900/80 text-red-200 border border-red-700 shadow-sm';
+                    if(dbUser.role === 'editor') roleBadge = 'bg-blue-900/80 text-blue-200 border border-blue-700 shadow-sm';
+
+                    userInfo.innerHTML = `
+                        <div class="flex items-center space-x-1.5 sm:space-x-3 border-l border-gray-700 pl-2 sm:pl-3">
+                            <div class="text-right leading-tight max-w-[60px] sm:max-w-[150px] truncate">
+                                <div class="text-xs sm:text-sm font-bold text-white truncate" title="${dbUser.name}">${dbUser.name}</div>
+                            </div>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-bold ${roleBadge} whitespace-nowrap shrink-0">${dbUser.role.toUpperCase()}</span>
+                            <button onclick="window.auth.logout()" class="p-2 text-gray-400 hover:text-white bg-gray-800 hover:bg-red-600 rounded-lg transition-colors border border-gray-700 shadow-sm flex items-center justify-center shrink-0" title="登出">
+                                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Show/Hide Nav buttons based on RBAC
+                    const isApproved = dbUser.status === 'active';
+                    document.getElementById('nav-upload').classList.toggle('hidden', !(isApproved && (dbUser.role === 'admin' || dbUser.role === 'editor')));
+                    document.getElementById('nav-records').classList.toggle('hidden', !isApproved);
+                    document.getElementById('nav-task').classList.toggle('hidden', !isApproved);
+                    document.getElementById('nav-admin').classList.toggle('hidden', !(isApproved && dbUser.role === 'admin'));
+                } else {
+                    mainNav.classList.add('hidden-view');
+                    userInfo.innerHTML = '';
+                }
+            },
+            
+            // 複製 Webhook 腳本
+            copyWebhookScript: () => {
+                const copyText = document.getElementById("webhook-script-code");
+                copyText.select();
+                copyText.setSelectionRange(0, 99999); // For mobile devices
+                try {
+                    document.execCommand("copy");
+                    ui.showModal('複製成功', 'Webhook 程式碼已複製到剪貼簿，請前往 Google Apps Script 貼上。', 'success');
+                } catch(e) {
+                    ui.showModal('複製失敗', '您的瀏覽器不支援自動複製，請手動全選並複製。', 'warning');
+                }
+            }
+        };
+
+        window.auth = {
+            login: async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const pass = document.getElementById('login-password').value;
+                
+                ui.showLoading(true, '登入中...');
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                    const user = userCredential.user;
+                    
+                    // Double Opt-in check
+                    if (!user.emailVerified) {
+                        await signOut(auth);
+                        ui.showLoading(false);
+                        ui.showModal('信箱未驗證', `
+                            <div class="text-red-600 font-bold mb-2">請先驗證您的 Email 信箱！</div>
+                            <p>我們已發送驗證信至 ${email}，請至信箱點擊連結後再登入。</p>
+                            <div class="mt-4 p-3 bg-[#65523A] text-[#FFE8B6] rounded-md border border-[#8C7A5E] text-left text-sm flex items-start shadow-inner">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 mr-2 text-[#FFE8B6]"></i>
+                                <span>溫馨提醒：註冊確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！</span>
+                            </div>
+                            <button onclick="window.auth.resendVerification('${email}', '${pass}')" class="mt-4 text-sm text-blue-600 underline hover:text-blue-800">重新發送驗證信</button>
+                        `, 'warning');
+                        return;
+                    }
+                    ui.showLoading(false);
+                    // onAuthStateChanged handles routing
+                } catch (error) {
+                    ui.showLoading(false);
+                    let msg = '登入失敗，請檢查帳號密碼。';
+                    if (error.code === 'auth/invalid-credential') msg = '帳號或密碼錯誤。';
+                    ui.showModal('登入失敗', msg, 'error');
+                }
+            },
+            resendVerification: async (email, pass) => {
+                ui.closeModal();
+                ui.showLoading(true, '發送中...');
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                    await sendEmailVerification(userCredential.user);
+                    await signOut(auth);
+                    ui.showLoading(false);
+                    ui.showModal('發送成功', '驗證信已重新發送，請檢查您的信箱。', 'success');
+                } catch(e) {
+                    ui.showLoading(false);
+                    ui.showModal('發送失敗', '無法發送，請稍後再試或確認帳密是否正確。', 'error');
+                }
+            },
+            register: async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('reg-name').value;
+                const email = document.getElementById('reg-email').value;
+                const pass = document.getElementById('reg-password').value;
+                const passConfirm = document.getElementById('reg-password-confirm').value;
+                const community = document.getElementById('reg-community').value;
+                const identity = document.getElementById('reg-identity').value;
+
+                if (pass !== passConfirm) {
+                    ui.showModal('錯誤', '兩次密碼輸入不一致', 'warning');
+                    return;
+                }
+
+                ui.showLoading(true, '註冊中...');
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                    const user = userCredential.user;
+                    
+                    // RBAC Logic: Creator -> Admin, Others -> viewer/pending
+                    let finalRole = 'viewer';
+                    let finalStatus = 'pending';
+                    
+                    if (email === 'mindnodeai@gmail.com') {
+                        finalRole = 'admin';
+                        finalStatus = 'active'; // Auto-active for creator
+                    }
+
+                    // Save to Firestore (Strict path)
+                    const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'community_users', user.uid);
+                    await setDoc(userDocRef, {
+                        uid: user.uid,
+                        name: name,
+                        email: email,
+                        communityName: community,
+                        identity: identity,
+                        role: finalRole,
+                        status: finalStatus,
+                        loginCount: 0,
+                        createdAt: new Date().toISOString(),
+                        lastLoginAt: new Date().toISOString()
+                    });
+
+                    await sendEmailVerification(user);
+                    await signOut(auth); // Force out
+
+                    ui.showLoading(false);
+                    ui.toggleAuthMode('login');
+                    
+                    ui.showModal('註冊成功！請驗證信箱', `
+                        <div class="text-green-600 font-bold mb-2">已發送驗證信至您的信箱</div>
+                        <p>請前往信箱點擊驗證連結，驗證完成後即可登入系統。</p>
+                        <div class="mt-4 p-3 bg-[#65523A] text-[#FFE8B6] rounded-md border border-[#8C7A5E] text-left text-sm flex items-start shadow-inner">
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5 mr-2 text-[#FFE8B6]"></i>
+                            <span>溫馨提醒：註冊確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！</span>
+                        </div>
+                    `, 'success');
+                    
+                } catch (error) {
+                    ui.showLoading(false);
+                    let msg = error.message;
+                    if(error.code === 'auth/email-already-in-use') msg = '此 Email 已被註冊過。';
+                    ui.showModal('註冊失敗', msg, 'error');
+                }
+            },
+            resetPassword: async () => {
+                const email = document.getElementById('login-email').value;
+                if (!email) {
+                    ui.showModal('提示', '請先在上方登入欄位輸入您的 Email，再點擊忘記密碼。', 'warning');
+                    return;
+                }
+                
+                ui.showLoading(true, '發送中...');
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                    ui.showLoading(false);
+                    ui.showModal('重設密碼信已發送', `
+                        <p>已將重設密碼連結發送至：<br><strong class="text-blue-600">${email}</strong></p>
+                        <div class="mt-4 p-3 bg-[#65523A] text-[#FFE8B6] rounded-md border border-[#8C7A5E] text-left text-sm flex items-start shadow-inner">
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5 mr-2 text-[#FFE8B6]"></i>
+                            <span>溫馨提醒：確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！</span>
+                        </div>
+                    `, 'success');
+                } catch (error) {
+                    ui.showLoading(false);
+                    ui.showModal('發送失敗', '無法發送，請確認信箱是否正確或已註冊。', 'error');
+                }
+            },
+            logout: async () => {
+                await signOut(auth);
+                window.appState.currentUser = null;
+                window.appState.userData = null;
+                ui.updateNavStatus();
+                ui.showView('view-login');
+            },
+            fetchUserData: async (user) => {
+                try {
+                    const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'community_users', user.uid);
+                    const userSnap = await getDoc(userDocRef);
+                    
+                    if (userSnap.exists()) {
+                        let data = userSnap.data();
+                        
+                        // Enforce Creator Admin Rule
+                        if(data.email === 'mindnodeai@gmail.com' && (data.role !== 'admin' || data.status !== 'active')) {
+                            data.role = 'admin';
+                            data.status = 'active';
+                            await updateDoc(userDocRef, { role: 'admin', status: 'active' });
+                        }
+
+                        window.appState.userData = data;
+                        
+                        await updateDoc(userDocRef, { 
+                            lastLoginAt: new Date().toISOString(),
+                            loginCount: (data.loginCount || 0) + 1
+                        });
+                        
+                        ui.updateNavStatus();
+                        
+                        if (window.appState.userData.status === 'pending') {
+                            ui.showView('view-pending');
+                        } else if (window.appState.userData.status === 'disabled') {
+                            ui.showModal('帳號停用', '您的帳號已被管理員停用，無法操作系統。', 'error');
+                            window.auth.logout();
+                        } else {
+                            // Active routing
+                            if(window.appState.userData.role === 'admin' || window.appState.userData.role === 'editor') {
+                                ui.showView('view-upload');
+                            } else {
+                                ui.showView('view-records');
+                            }
+                            // Load records after login
+                            window.invoiceOps.loadLocalRecords();
+                        }
+                    } else {
+                        ui.showModal('錯誤', '找不到您的使用者資料檔，請聯繫管理員。', 'error');
+                        window.auth.logout();
+                    }
+                } catch (e) {
+                    console.error("Error fetching user data:", e);
+                }
+            }
+        };
+
+        // Attach Login/Reg listeners
+        document.getElementById('login-form').addEventListener('submit', window.auth.login);
+        document.getElementById('register-form').addEventListener('submit', window.auth.register);
+
+        // Auth Listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                if (!user.emailVerified) {
+                    window.appState.currentUser = null;
+                    window.appState.userData = null;
+                    ui.updateNavStatus();
+                    ui.showView('view-login');
+                } else {
+                    window.appState.currentUser = user;
+                    await window.auth.fetchUserData(user);
+                }
+            } else {
+                window.appState.currentUser = null;
+                window.appState.userData = null;
+                ui.updateNavStatus();
+                ui.showView('view-login');
+            }
+        });
+
+        window.settingsOps = {
+            init: () => {
+                document.getElementById('setting-gemini-key').value = window.appState.apiKey;
+                document.getElementById('setting-webhook-url').value = window.appState.sheetWebhook;
+                
+                document.getElementById('settings-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const key = document.getElementById('setting-gemini-key').value.trim();
+                    const url = document.getElementById('setting-webhook-url').value.trim();
+                    
+                    if(!key) {
+                        ui.showModal('錯誤', 'Gemini API Key 為必填項目', 'warning');
+                        return;
+                    }
+                    
+                    localStorage.setItem('geminiApiKey', key);
+                    localStorage.setItem('googleSheetWebhook', url);
+                    
+                    window.appState.apiKey = key;
+                    window.appState.sheetWebhook = url;
+                    
+                    ui.updateNavStatus();
+                    ui.showModal('設定已儲存', 'API 金鑰與 Webhook 已成功儲存在您的瀏覽器中。', 'success');
+                });
+            }
+        };
+        window.settingsOps.init();
+
+        window.adminOps = {
+            loadUsers: async () => {
+                if(!auth.currentUser || window.appState.userData?.role !== 'admin') return;
+                
+                const tbody = document.getElementById('admin-users-tbody');
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-red-700 mx-auto"></div></td></tr>';
+                
+                try {
+                    const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'community_users');
+                    const snapshot = await getDocs(usersRef);
+                    let records = [];
+                    snapshot.forEach(doc => records.push({id: doc.id, ...doc.data()}));
+                    records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    
+                    window.appState.usersList = records;
+                    let html = '';
+
+                    records.forEach(u => {
+                        let statCls = 'bg-gray-100 text-gray-700';
+                        if(u.status==='active') statCls = 'bg-green-100 text-green-700 font-bold border border-green-300';
+                        if(u.status==='pending') statCls = 'bg-yellow-100 text-yellow-700 border border-yellow-300';
+                        if(u.status==='disabled') statCls = 'bg-red-100 text-red-700 border border-red-300';
+                        
+                        let roleCls = 'bg-gray-100 text-gray-600';
+                        if(u.role==='admin') roleCls = 'bg-red-50 text-red-700 font-bold';
+                        if(u.role==='editor') roleCls = 'bg-blue-50 text-blue-700';
+
+                        const isCreator = u.email === 'mindnodeai@gmail.com';
+                        const disableActions = isCreator ? 'disabled title="創作者帳號無法變更"' : '';
+                        const selectStyle = isCreator ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-gray-400 focus:ring-1 focus:ring-red-500';
+
+                        html += `
+                        <tr class="border-b hover:bg-gray-50 transition-colors">
+                            <td class="p-3">
+                                <div class="font-bold text-gray-800">${u.name}</div>
+                                <div class="text-xs text-gray-500">${u.email}</div>
+                            </td>
+                            <td class="p-3 text-sm text-gray-600">${u.identity || '一般'}</td>
+                            <td class="p-3 text-sm text-gray-600">${u.communityName || '-'}</td>
+                            <td class="p-3 text-xs text-gray-500">${new Date(u.createdAt).toLocaleDateString()}</td>
+                            <td class="p-3 text-center"><span class="px-2 py-1 rounded text-xs border ${roleCls}">${u.role.toUpperCase()}</span></td>
+                            <td class="p-3 text-center"><span class="px-2 py-1 rounded text-xs ${statCls}">${u.status}</span></td>
+                            <td class="p-3 text-center text-sm text-gray-600">${u.loginCount || 0}</td>
+                            <td class="p-3 text-right">
+                                <div class="flex flex-col space-y-1.5 items-end">
+                                    <select class="border border-gray-300 p-1 text-xs rounded bg-white w-28 ${selectStyle}" onchange="window.adminOps.updateUserStatus('${u.uid}', '${u.email}', this.value)" ${disableActions}>
+                                        <option value="">狀態...</option>
+                                        <option value="active">🟢 核准 Active</option>
+                                        <option value="pending">🟡 待審 Pending</option>
+                                        <option value="disabled">🔴 停用 Disable</option>
+                                    </select>
+                                    <select class="border border-gray-300 p-1 text-xs rounded bg-white w-28 ${selectStyle}" onchange="window.adminOps.updateUserRole('${u.uid}', '${u.email}', this.value)" ${disableActions}>
+                                        <option value="">權限...</option>
+                                        <option value="viewer">👀 檢視 Viewer</option>
+                                        <option value="editor">📝 編輯 Editor</option>
+                                        <option value="admin">👑 管理 Admin</option>
+                                    </select>
+                                    <button onclick="window.adminOps.deleteUser('${u.uid}', '${u.email}')" class="text-xs text-red-600 hover:text-white border border-red-200 hover:bg-red-600 px-2 py-1 rounded w-28 text-center transition-colors shadow-sm" ${disableActions}>
+                                        <i class="fa-solid fa-trash-can mr-1"></i>刪除帳號
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        `;
+                    });
+                    tbody.innerHTML = html;
+                } catch(e) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">讀取失敗：${e.message}</td></tr>`;
+                }
+            },
+            updateUserStatus: async (uid, email, newStatus) => {
+                if(!newStatus) return;
+                ui.showConfirmModal('變更狀態', `確定將 <strong>${email}</strong> 狀態改為 <strong>${newStatus}</strong>?`, async () => {
+                    try {
+                        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'community_users', uid);
+                        await updateDoc(userRef, { status: newStatus });
+                        ui.showModal('更新成功', `用戶狀態已更新。`, 'success');
+                        window.adminOps.loadUsers();
+                    } catch(e) { ui.showModal('錯誤', e.message, 'error'); }
+                });
+            },
+            updateUserRole: async (uid, email, newRole) => {
+                if(!newRole) return;
+                ui.showConfirmModal('變更權限', `確定將 <strong>${email}</strong> 權限改為 <strong>${newRole}</strong>?`, async () => {
+                    try {
+                        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'community_users', uid);
+                        await updateDoc(userRef, { role: newRole });
+                        ui.showModal('更新成功', `用戶權限已更新。`, 'success');
+                        window.adminOps.loadUsers();
+                    } catch(e) { ui.showModal('錯誤', e.message, 'error'); }
+                });
+            },
+            deleteUser: async (uid, email) => {
+                ui.showConfirmModal('刪除帳號', `⚠️ 警告：確定要徹底刪除 <strong>${email}</strong> 嗎？此操作無法復原！`, async () => {
+                    ui.showLoading(true, '刪除中...');
+                    try {
+                        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'community_users', uid);
+                        await deleteDoc(userRef);
+                        ui.showLoading(false);
+                        ui.showModal('刪除成功', `用戶已移除。`, 'success');
+                        window.adminOps.loadUsers();
+                    } catch(e) { 
+                        ui.showLoading(false);
+                        ui.showModal('刪除失敗', e.message, 'error'); 
+                    }
+                });
+            },
+            exportUsersCSV: () => {
+                const records = window.appState.usersList;
+                if(!records || records.length === 0) {
+                    ui.showModal('提示', '沒有資料可匯出', 'info'); return;
+                }
+                const headers = ['註冊時間', '真實姓名', 'Email', '身分', '社區名稱', '權限角色', '帳號狀態', '登入次數'];
+                let csvContent = "\uFEFF" + headers.join(',') + '\n'; // BOM
+                
+                records.forEach(r => {
+                    const row = [
+                        r.createdAt, 
+                        `"${r.name || ''}"`, 
+                        r.email, 
+                        r.identity || '',
+                        `"${r.communityName || ''}"`, 
+                        r.role, 
+                        r.status, 
+                        r.loginCount || 0
+                    ];
+                    csvContent += row.join(',') + '\n';
+                });
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `會員名單匯出_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        window.invoiceOps = {
+            currentBase64: null,
+            editingId: null, // 用於儲存正在編輯的紀錄 ID
+            
+            // 取得雲端對應的 Firestore Document Reference
+            getCloudDocRef: async (recordId) => {
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'vouchers'), where('id', '==', recordId));
+                const snap = await getDocs(q);
+                if(!snap.empty) {
+                    return doc(db, 'artifacts', appId, 'public', 'data', 'vouchers', snap.docs[0].id);
+                }
+                return null;
+            },
+
+            handleFileSelect: (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    window.invoiceOps.currentBase64 = event.target.result;
+                    document.getElementById('image-preview').src = window.invoiceOps.currentBase64;
+                    document.getElementById('image-preview-container').classList.remove('hidden');
+                    document.getElementById('drop-zone').classList.add('hidden');
+                    document.getElementById('btn-ocr').classList.remove('hidden');
+                    document.getElementById('btn-ocr').disabled = false;
+                };
+                reader.readAsDataURL(file);
+            },
+            clearFile: () => {
+                window.invoiceOps.currentBase64 = null;
+                document.getElementById('invoice-file').value = '';
+                document.getElementById('image-preview').src = '';
+                document.getElementById('image-preview-container').classList.add('hidden');
+                document.getElementById('drop-zone').classList.remove('hidden');
+                document.getElementById('btn-ocr').classList.add('hidden');
+                document.getElementById('invoice-form').classList.add('opacity-50', 'pointer-events-none');
+                document.getElementById('invoice-form').reset();
+            },
+            runOCR: async () => {
+                if(!window.appState.apiKey) {
+                    ui.showModal('提示', '請先至右上角「設定」輸入您的 Gemini API Key。', 'warning');
+                    return;
+                }
+                if(!window.invoiceOps.currentBase64) return;
+
+                ui.showLoading(true, 'AI 努力辨識中，請稍候...');
+                try {
+                    const base64Data = window.invoiceOps.currentBase64.split(',')[1];
+                    const mimeType = window.invoiceOps.currentBase64.split(';')[0].split(':')[1];
+
+                    const promptText = `你是專業會計助理。請讀取這張憑證圖片，擷取資料並以 JSON 格式回傳，不要有任何其他說明文字，也不要使用 \`\`\`json 標籤包覆，直接回傳乾淨的 JSON 字串。
+                    必須包含的 key：
+                    date (YYYY-MM-DD), document_type (發票/收據/估價單/其他), invoice_number (若無填空), vendor (交易對象), summary (品項摘要), amount (純數字), account_category (從：清潔費,保全費,機電維護,修繕費,水電費,行政雜支,零用金支出,其他支出 中選一), payment_method, voucher_status (已確認 / 需人工確認), note (備註/疑點)`;
+
+                    const payload = {
+                        contents: [{
+                            parts: [
+                                { text: promptText },
+                                { inlineData: { mimeType: mimeType, data: base64Data } }
+                            ]
+                        }],
+                        generationConfig: { temperature: 0.1, topK: 32, topP: 1, responseMimeType: "application/json" }
+                    };
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${window.appState.apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    
+                    if(result.error) throw new Error(result.error.message);
+
+                    const textRes = result.candidates[0].content.parts[0].text;
+                    const data = JSON.parse(textRes);
+
+                    // Map to Form
+                    document.getElementById('inv-date').value = data.date || '';
+                    if(data.document_type) document.getElementById('inv-type').value = data.document_type;
+                    document.getElementById('inv-number').value = data.invoice_number || '';
+                    document.getElementById('inv-vendor').value = data.vendor || '';
+                    document.getElementById('inv-summary').value = data.summary || '';
+                    document.getElementById('inv-amount').value = data.amount || '';
+                    if(data.account_category) document.getElementById('inv-category').value = data.account_category;
+                    document.getElementById('inv-payment').value = data.payment_method || '';
+                    if(data.voucher_status) document.getElementById('inv-status').value = data.voucher_status;
+                    document.getElementById('inv-note').value = data.note || '';
+
+                    // Enable Form
+                    document.getElementById('invoice-form').classList.remove('opacity-50', 'pointer-events-none');
+                    document.getElementById('btn-ocr').disabled = true;
+                    document.getElementById('btn-ocr').innerHTML = '<i class="fa-solid fa-check mr-2"></i>辨識完成，請人工核對';
+                    
+                    ui.showLoading(false);
+                } catch(e) {
+                    ui.showLoading(false);
+                    console.error(e);
+                    ui.showModal('辨識失敗', 'AI 無法順利辨識，可能因圖片不清晰或 API 額度限制。請手動輸入欄位。<br><br>錯誤訊息：' + e.message, 'error');
+                    document.getElementById('invoice-form').classList.remove('opacity-50', 'pointer-events-none');
+                }
+            },
+            saveData: async (e) => {
+                e.preventDefault();
+                const record = {
+                    id: Date.now().toString(),
+                    createdAt: new Date().toISOString(),
+                    month: document.getElementById('inv-date').value.substring(0,7),
+                    date: document.getElementById('inv-date').value,
+                    type: document.getElementById('inv-type').value,
+                    invoiceNumber: document.getElementById('inv-number').value,
+                    vendor: document.getElementById('inv-vendor').value,
+                    summary: document.getElementById('inv-summary').value,
+                    amount: Number(document.getElementById('inv-amount').value),
+                    category: document.getElementById('inv-category').value,
+                    payment: document.getElementById('inv-payment').value,
+                    status: document.getElementById('inv-status').value,
+                    note: document.getElementById('inv-note').value,
+                    creatorEmail: window.appState.userData.email,
+                    creatorName: window.appState.userData.name,
+                    community: window.appState.userData.communityName || '無'
+                };
+
+                ui.showLoading(true, '儲存資料中...');
+
+                try {
+                    // 1. Save to Local Storage
+                    window.appState.localVouchers.unshift(record);
+                    localStorage.setItem('localVouchers', JSON.stringify(window.appState.localVouchers));
+
+                    // 2. Save to Firestore (Cloud Backup)
+                    const docRef = collection(db, 'artifacts', appId, 'public', 'data', 'vouchers');
+                    await addDoc(docRef, record);
+
+                    // 3. Webhook (Optional Google Sheets)
+                    if(window.appState.sheetWebhook) {
+                        try {
+                            await fetch(window.appState.sheetWebhook, {
+                                method: 'POST',
+                                mode: 'no-cors',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify(record)
+                            });
+                        } catch(whErr) { console.warn("Webhook fetch error (no-cors expected):", whErr); }
+                    }
+
+                    ui.showLoading(false);
+                    ui.showModal('儲存成功', '單據已成功記錄至本地端與雲端資料庫。', 'success');
+                    window.invoiceOps.clearFile();
+                    window.invoiceOps.loadLocalRecords();
+                } catch(err) {
+                    ui.showLoading(false);
+                    ui.showModal('儲存失敗', '雲端連線失敗，請檢查網路連線。', 'warning');
+                    console.error(err);
+                }
+            },
+            
+            // 編輯功能
+            editRecord: (id) => {
+                const record = window.appState.localVouchers.find(r => r.id === id);
+                if(!record) return;
+                
+                window.invoiceOps.editingId = id;
+                document.getElementById('edit-inv-date').value = record.date || '';
+                document.getElementById('edit-inv-type').value = record.type || '發票';
+                document.getElementById('edit-inv-number').value = record.invoiceNumber || '';
+                document.getElementById('edit-inv-vendor').value = record.vendor || '';
+                document.getElementById('edit-inv-summary').value = record.summary || '';
+                document.getElementById('edit-inv-amount').value = record.amount || '';
+                document.getElementById('edit-inv-category').value = record.category || '';
+                document.getElementById('edit-inv-payment').value = record.payment || '';
+                document.getElementById('edit-inv-status').value = record.status || '已確認';
+                document.getElementById('edit-inv-note').value = record.note || '';
+                
+                document.getElementById('edit-record-modal').classList.remove('hidden');
+            },
+
+            saveEditRecord: async (e) => {
+                e.preventDefault();
+                if(!window.invoiceOps.editingId) return;
+                
+                const id = window.invoiceOps.editingId;
+                const recordIndex = window.appState.localVouchers.findIndex(r => r.id === id);
+                if(recordIndex === -1) return;
+
+                const updatedData = {
+                    month: document.getElementById('edit-inv-date').value.substring(0,7),
+                    date: document.getElementById('edit-inv-date').value,
+                    type: document.getElementById('edit-inv-type').value,
+                    invoiceNumber: document.getElementById('edit-inv-number').value,
+                    vendor: document.getElementById('edit-inv-vendor').value,
+                    summary: document.getElementById('edit-inv-summary').value,
+                    amount: Number(document.getElementById('edit-inv-amount').value),
+                    category: document.getElementById('edit-inv-category').value,
+                    payment: document.getElementById('edit-inv-payment').value,
+                    status: document.getElementById('edit-inv-status').value,
+                    note: document.getElementById('edit-inv-note').value,
+                };
+
+                ui.showLoading(true, '儲存更新中...');
+                try {
+                    // 1. 更新雲端 Firestore
+                    const docRef = await window.invoiceOps.getCloudDocRef(id);
+                    if(docRef) {
+                        await updateDoc(docRef, updatedData);
+                    }
+
+                    // 2. 更新本地端
+                    window.appState.localVouchers[recordIndex] = { ...window.appState.localVouchers[recordIndex], ...updatedData };
+                    localStorage.setItem('localVouchers', JSON.stringify(window.appState.localVouchers));
+
+                    ui.showLoading(false);
+                    document.getElementById('edit-record-modal').classList.add('hidden');
+                    window.invoiceOps.loadLocalRecords();
+                    ui.showModal('修改成功', '資料已於本地與雲端更新完成。<br><br><span class="text-red-600 font-bold">提醒：如果您有串接 Google Sheets，試算表上的資料不會自動修改，請手動前往 Google 試算表修正！</span>', 'success');
+                } catch(err) {
+                    ui.showLoading(false);
+                    ui.showModal('修改失敗', '無法更新資料，錯誤訊息：' + err.message, 'error');
+                }
+            },
+
+            // 刪除功能
+            deleteRecord: (id) => {
+                ui.showConfirmModal('刪除紀錄', '確定要刪除這筆單據紀錄嗎？<br>刪除後將同時從<strong class="text-red-500">本地端</strong>與<strong class="text-red-500">雲端</strong>移除。<br><br><span class="text-xs text-gray-500">※ 注意：Google 試算表端的資料請手動刪除，系統無法遠端刪除試算表列。</span>', async () => {
+                    ui.showLoading(true, '刪除中...');
+                    try {
+                        // 1. 從雲端刪除
+                        const docRef = await window.invoiceOps.getCloudDocRef(id);
+                        if(docRef) {
+                            await deleteDoc(docRef);
+                        }
+
+                        // 2. 從本地端刪除
+                        window.appState.localVouchers = window.appState.localVouchers.filter(r => r.id !== id);
+                        localStorage.setItem('localVouchers', JSON.stringify(window.appState.localVouchers));
+
+                        window.invoiceOps.loadLocalRecords();
+                        ui.showLoading(false);
+                        ui.showModal('刪除成功', '資料已成功刪除。', 'success');
+                    } catch(e) {
+                        ui.showLoading(false);
+                        ui.showModal('刪除失敗', '刪除過程中發生錯誤：' + e.message, 'error');
+                    }
+                });
+            },
+
+            // 從雲端同步資料
+            syncFromCloud: async () => {
+                if(!window.appState.userData) return;
+                ui.showLoading(true, '從雲端同步資料中...');
+                try {
+                    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'vouchers'),
+                        where('community', '==', window.appState.userData.communityName || '無'));
+                    const snapshot = await getDocs(q);
+                    
+                    let cloudRecords = [];
+                    snapshot.forEach(docSnap => cloudRecords.push(docSnap.data()));
+
+                    // 使用 ID 合併資料 (雲端覆蓋本地)
+                    let local = window.appState.localVouchers;
+                    let localMap = new Map(local.map(r => [r.id, r]));
+
+                    cloudRecords.forEach(cr => {
+                        localMap.set(cr.id, cr); // 新增或更新
+                    });
+
+                    let merged = Array.from(localMap.values());
+                    // 依照建立時間排序 (最新的在最上面)
+                    merged.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    
+                    window.appState.localVouchers = merged;
+                    localStorage.setItem('localVouchers', JSON.stringify(merged));
+
+                    window.invoiceOps.loadLocalRecords();
+                    ui.showLoading(false);
+                    ui.showModal('同步成功', `已與雲端同步，目前共有 ${merged.length} 筆資料。`, 'success');
+                } catch(e) {
+                    ui.showLoading(false);
+                    ui.showModal('同步失敗', e.message, 'error');
+                }
+            },
+
+            // 備份與載入 JSON
+            backupData: () => {
+                if(window.appState.localVouchers.length === 0) {
+                    ui.showModal('提示', '沒有資料可供備份', 'info'); return;
+                }
+                const data = JSON.stringify(window.appState.localVouchers, null, 2);
+                const blob = new Blob([data], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `發票紀錄備份_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            restoreData: (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        if(Array.isArray(imported)) {
+                            ui.showConfirmModal('載入備份', `系統將載入 ${imported.length} 筆資料並與現有紀錄合併，是否繼續？`, () => {
+                                let local = window.appState.localVouchers;
+                                let localMap = new Map(local.map(r => [r.id, r]));
+                                
+                                imported.forEach(cr => {
+                                    if(cr.id) localMap.set(cr.id, cr);
+                                });
+
+                                let merged = Array.from(localMap.values());
+                                merged.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+                                
+                                window.appState.localVouchers = merged;
+                                localStorage.setItem('localVouchers', JSON.stringify(merged));
+                                window.invoiceOps.loadLocalRecords();
+                                
+                                ui.showModal('載入成功', '備份資料已載入本地端。建議您可以點擊「從雲端同步」確保雲端資料雙向一致。', 'success');
+                            });
+                        } else {
+                            throw new Error('格式不符');
+                        }
+                    } catch(err) {
+                        ui.showModal('錯誤', '無法解析備份檔案，請確認是否為系統匯出的 JSON 檔。', 'error');
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = ''; // Reset input
+            },
+
+            loadLocalRecords: () => {
+                const tbody = document.getElementById('records-tbody');
+                const records = window.appState.localVouchers;
+                
+                if(records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-500">尚無單據紀錄</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                records.forEach(r => {
+                    let statColor = r.status === '已確認' ? 'text-green-600' : 'text-red-600';
+                    html += `
+                        <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+                            <td class="p-3 text-xs text-gray-500">${new Date(r.createdAt).toLocaleString()}</td>
+                            <td class="p-3 text-sm font-medium text-gray-800">${r.date}</td>
+                            <td class="p-3">
+                                <div class="text-sm font-bold text-gray-800">${r.vendor}</div>
+                                <div class="text-xs text-gray-500">${r.summary}</div>
+                            </td>
+                            <td class="p-3 text-sm font-bold text-red-600 text-right font-mono">$${r.amount.toLocaleString()}</td>
+                            <td class="p-3 text-sm text-gray-600"><span class="bg-gray-100 px-2 py-1 rounded text-xs">${r.category}</span></td>
+                            <td class="p-3 text-sm font-medium ${statColor}">${r.status}</td>
+                            <td class="p-3 text-xs text-gray-500">${r.creatorName}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex justify-center space-x-2">
+                                    <button onclick="window.invoiceOps.editRecord('${r.id}')" class="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors" title="修改"><i class="fa-solid fa-pen-to-square"></i></button>
+                                    <button onclick="window.invoiceOps.deleteRecord('${r.id}')" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors" title="刪除"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            },
+            exportLocalCSV: () => {
+                const records = window.appState.localVouchers;
+                if(records.length === 0) {
+                    ui.showModal('提示', '沒有紀錄可匯出', 'info'); return;
+                }
+                const headers = ['建立時間','月份','日期','單據類型','發票號碼','交易對象','品項摘要','科目','金額','付款方式','憑證狀態','備註','建檔人Email','建檔人姓名','社區'];
+                let csvContent = "\uFEFF" + headers.join(',') + '\n';
+                
+                records.forEach(r => {
+                    const row = [
+                        r.createdAt, r.month, r.date, r.type, `"${r.invoiceNumber||''}"`, `"${r.vendor}"`, 
+                        `"${r.summary}"`, r.category, r.amount, r.payment, r.status, `"${r.note||''}"`, 
+                        r.creatorEmail, `"${r.creatorName}"`, `"${r.community}"`
+                    ];
+                    csvContent += row.join(',') + '\n';
+                });
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `發票紀錄匯出_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        window.taskOps = {
+            handleFilesSelect: async (e) => {
+                const files = e.target.files;
+                if(files.length === 0) return;
+                
+                ui.showLoading(true, '讀取檔案中...');
+                
+                // 初始化陣列 (若尚無)
+                if (!window.appState.taskFilesData) window.appState.taskFilesData = [];
+                
+                for(let i=0; i<files.length; i++) {
+                    const file = files[i];
+                    try {
+                        const base64 = await window.taskOps.fileToBase64(file);
+                        let mime = file.type;
+                        
+                        // Handle CSV/TXT as plain text for API simplicity, Images/PDF as base64
+                        if(file.name.endsWith('.csv')) mime = 'text/csv';
+                        if(file.name.endsWith('.md')) mime = 'text/plain';
+                        
+                        // 將檔案與預覽資訊存入陣列 (累加上傳)
+                        window.appState.taskFilesData.push({
+                            id: Date.now() + i, // 產生唯一 ID 供刪除使用
+                            name: file.name,
+                            size: file.size,
+                            apiPart: {
+                                inlineData: {
+                                    data: base64.split(',')[1],
+                                    mimeType: mime || 'text/plain'
+                                }
+                            }
+                        });
+                    } catch(err) {
+                        console.error("File read error:", err);
+                        ui.showModal('錯誤', `檔案 ${file.name} 讀取失敗`, 'error');
+                    }
+                }
+                
+                window.taskOps.renderFileList();
+                ui.showLoading(false);
+                e.target.value = ''; // Reset input 以便使用者可重複選取同一檔案
+            },
+            removeFile: (id) => {
+                // 透過 ID 過濾掉要刪除的檔案
+                window.appState.taskFilesData = window.appState.taskFilesData.filter(f => f.id !== id);
+                window.taskOps.renderFileList();
+            },
+            renderFileList: () => {
+                const listEl = document.getElementById('task-file-list');
+                listEl.innerHTML = '';
+                
+                if (!window.appState.taskFilesData || window.appState.taskFilesData.length === 0) return;
+                
+                window.appState.taskFilesData.forEach(file => {
+                    // 渲染帶有刪除按鈕的精美清單
+                    listEl.innerHTML += `
+                        <li class="flex items-center justify-between bg-amber-50/80 px-3 py-2 rounded-lg border border-amber-200 shadow-sm transition-all hover:bg-amber-100/80">
+                            <div class="flex items-center truncate mr-2">
+                                <i class="fa-solid fa-file-lines text-amber-500 mr-2 shrink-0"></i>
+                                <span class="truncate text-gray-700 font-medium text-sm">${file.name}</span>
+                                <span class="text-xs text-gray-400 ml-2 shrink-0">(${Math.round(file.size/1024)} KB)</span>
+                            </div>
+                            <button onclick="window.taskOps.removeFile(${file.id})" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors shrink-0" title="移除此檔案">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </li>
+                    `;
+                });
+            },
+            fileToBase64: (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            }),
+            runTask: async () => {
+                if(!window.appState.apiKey) {
+                    ui.showModal('提示', '請先至右上角「設定」輸入您的 Gemini API Key。', 'warning'); return;
+                }
+                
+                const prompt = document.getElementById('task-prompt').value.trim();
+                const link = document.getElementById('task-link').value.trim();
+                
+                if(!prompt) {
+                    ui.showModal('提示', '請輸入任務指令與背景說明', 'warning'); return;
+                }
+
+                ui.showLoading(true, 'AI 思考執行中，請稍候...');
+                document.getElementById('task-placeholder').classList.add('hidden');
+                const resultEl = document.getElementById('task-result-content');
+                resultEl.innerHTML = '<div class="flex items-center space-x-2 text-amber-600"><div class="animate-pulse flex space-x-1"><div class="h-2 w-2 bg-amber-500 rounded-full"></div><div class="h-2 w-2 bg-amber-500 rounded-full animation-delay-200"></div><div class="h-2 w-2 bg-amber-500 rounded-full animation-delay-400"></div></div><span>生成中...</span></div>';
+                resultEl.classList.remove('hidden');
+
+                try {
+                    let parts = [{ text: prompt }];
+                    
+                    if(link) parts.push({ text: `參考補充連結：${link}` });
+                    
+                    // Add files
+                    if(window.appState.taskFilesData && window.appState.taskFilesData.length > 0) {
+                        const fileParts = window.appState.taskFilesData.map(f => f.apiPart);
+                        parts = parts.concat(fileParts);
+                    }
+
+                    const payload = {
+                        contents: [{ parts: parts }],
+                        generationConfig: { temperature: 0.4 } // Creative but focused
+                    };
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${window.appState.apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    if(result.error) throw new Error(result.error.message);
+
+                    const textRes = result.candidates[0].content.parts[0].text;
+                    
+                    // Render Markdown
+                    resultEl.innerHTML = marked.parse(textRes);
+                    // Save raw text for copy/word
+                    resultEl.setAttribute('data-raw', textRes);
+                    
+                    ui.showLoading(false);
+                } catch(e) {
+                    ui.showLoading(false);
+                    console.error(e);
+                    resultEl.innerHTML = `<div class="text-red-500 p-4 bg-red-50 rounded border border-red-200">執行失敗：${e.message}</div>`;
+                }
+            },
+            copyResult: () => {
+                const el = document.getElementById('task-result-content');
+                const rawText = el.getAttribute('data-raw');
+                if(!rawText) return;
+                
+                // Fallback for iframe environment
+                const textarea = document.createElement("textarea");
+                textarea.value = rawText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    ui.showModal('複製成功', 'AI 產出內容已複製到剪貼簿。', 'success');
+                } catch (err) {
+                    ui.showModal('複製失敗', '您的瀏覽器不支援自動複製。', 'error');
+                }
+                document.body.removeChild(textarea);
+            },
+            exportWord: () => {
+                const el = document.getElementById('task-result-content');
+                if(el.classList.contains('hidden') || !el.innerHTML) {
+                    ui.showModal('提示', '尚無內容可匯出', 'warning'); return;
+                }
+
+                // Simple HTML to DOC export method
+                const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML to Word</title></head><body>";
+                const footer = "</body></html>";
+                const html = header + el.innerHTML + footer;
+
+                const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+                const url = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(html);
+                
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `AI任務報告_${new Date().getTime()}.doc`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        // Enable Drag & Drop for Invoice
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            if(e.dataTransfer.files.length) {
+                document.getElementById('invoice-file').files = e.dataTransfer.files;
+                window.invoiceOps.handleFileSelect({target: document.getElementById('invoice-file')});
+            }
+        });
+
+    </script>
+</body>
+</html>
